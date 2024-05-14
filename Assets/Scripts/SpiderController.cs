@@ -22,6 +22,8 @@ public class SpiderController : MonoBehaviour
     private float _bodyOffset = 1f;
     [SerializeField]
     private float _detectingDistance = 5.0f;
+    [SerializeField, Range(0.0f, 1.0f)]
+    private float _bodyCalibratingSpeed = 1.0f;
 
     private int _index = 0;
     private bool[] _moving;
@@ -49,34 +51,60 @@ public class SpiderController : MonoBehaviour
         }
     }
 
-    private void Update()
+    private void _UpdateDefaultLegsPosition()
     {
         foreach (var leg in Legs)
         {
             if (!Physics.Raycast(
-                leg.DefaultTransform.position + transform.up * _bodyOffset, 
-                -transform.up, 
+                leg.DefaultTransform.position + transform.up * _bodyOffset,
+                -transform.up,
                 out var hit,
                 _detectingDistance))
                 continue;
 
             leg.DefaultTransform.position = hit.point;
         }
+
     }
 
+    private void _UpdateBodyPosition()
+    {
+        var position = transform.position;
+        var targetYPos = _CalculateBodyHeightCalibration();
+        var calibratedYPos = Mathf.Lerp(position.y, targetYPos, Time.deltaTime * _bodyCalibratingSpeed);
+        position.y = calibratedYPos;
+        transform.position = position;
+    }
 
-    // TODO
+    private float _CalculateBodyHeightCalibration()
+    {
+        // Candidate 1: Detect obstacles below the body
+        float candidateY1 = transform.position.y;
+        if (Physics.Raycast(
+                transform.position,
+                -transform.up,
+                out var hit,
+                _detectingDistance))
+            candidateY1 = hit.point.y + _bodyOffset;
+
+        // Candidate 2: Average of lowest leg and highest leg's Y position
+        float maxx = Legs[0].DefaultTransform.position.y;
+        float minn = Legs[0].DefaultTransform.position.y;
+        foreach (var leg in Legs)
+        {
+            minn = Mathf.Min(minn, leg.DefaultTransform.position.y);
+            maxx = Mathf.Max(maxx, leg.DefaultTransform.position.y);
+        }
+        float candidateY2 = (maxx + minn) / 2.0f + _bodyOffset;
+
+        return Mathf.Max(candidateY1, candidateY2);
+    }
+
     private void FixedUpdate()
     {
-        /*
-        Vector3 sum = Vector3.zero;
-        foreach(var t in homes)
-        {
-            sum += t.position;
-        }
-        sum /= 4;
-        transform.position = transform.up * (bodyOffset + sum.y);
-        */
+        _UpdateDefaultLegsPosition();
+
+        _UpdateBodyPosition();
     }
 
     private void _TryMove(int legIndex)
