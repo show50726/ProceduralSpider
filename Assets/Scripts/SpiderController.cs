@@ -1,38 +1,69 @@
-using System.Collections;
-using System.Collections.Generic;
-using UnityEngine;
 using DG.Tweening;
+using DitzelGames.FastIK;
+using System.Collections;
+using UnityEngine;
 
 public class SpiderController : MonoBehaviour
 {
-    public Transform[] targets;
-    public Transform[] homes;
-    public float maxDistance = 3f;
-    public float moveSpeed = 4f;
-    public float bodyOffset = 1f;
+    [System.Serializable]
+    private struct LegData
+    {
+        public FastIKFabric LegIK;
+        public Transform DefaultTransform;
+    }
 
-    int index = 0;
-    bool[] moving = new bool[4];
+    [SerializeField]
+    private LegData[] Legs;
+    [SerializeField]
+    private float _maxDistance = 3f;
+    [SerializeField]
+    private float _moveSpeed = 4f;
+    [SerializeField]
+    private float _bodyOffset = 1f;
+    [SerializeField]
+    private bool _DrawDebugInfo = true;
+
+    private int _index = 0;
+    private bool[] _moving;
 
     private void Awake()
     {
-        bodyOffset = transform.position.y - targets[1].position.y;
-        Debug.Log(bodyOffset);
-        StartCoroutine(LegUpdateCoroutine());
+        if(Legs.Length == 0)
+        {
+            Debug.LogWarning("Leg data is empty. The Coroutine will not be triggered.");
+        }
+
+        _moving = new bool[Legs.Length];
+        _bodyOffset = transform.position.y - Legs[0].DefaultTransform.position.y;
+
+        _AlignTargetToFoot();
+
+        StartCoroutine(_UpdateLegs());
     }
 
-    // Update is called once per frame
-    void Update()
+    private void _AlignTargetToFoot()
     {
-        foreach (var h in homes)
+        foreach(var leg in Legs)
         {
-            RaycastHit hit;
-            if (Physics.Raycast(h.transform.position + transform.up * 0.1f, -transform.up, out hit, 5))
-            {
+            leg.LegIK.Target.position = leg.LegIK.transform.position;
+        }
+    }
+
+    private void Update()
+    {
+        foreach (var leg in Legs)
+        {
+            if (!Physics.Raycast(
+                leg.DefaultTransform.position + transform.up * _bodyOffset, 
+                -transform.up, 
+                out var hit, 
+                5))
+                continue;
+
+            if (_DrawDebugInfo)
                 Debug.DrawLine(hit.point, hit.point + Vector3.up);
-                //Debug.Log(hit.transform.gameObject.name);
-                h.transform.position = hit.point;
-            }
+
+            leg.DefaultTransform.position = hit.point;
         }
     }
 
@@ -51,47 +82,52 @@ public class SpiderController : MonoBehaviour
         */
     }
 
-    void TryMove(int i)
+    private void _TryMove(int legIndex)
     {
-        if (moving[i]) return;
-        float dis = Vector3.Distance(targets[i].transform.position, homes[i].transform.position);
-        if (dis > maxDistance)
+        if (_moving[legIndex])
+            return;
+
+        var legIKTarget = Legs[legIndex].LegIK.Target;
+        var defaultTransform = Legs[legIndex].DefaultTransform;
+
+        float distance = Vector3.Distance(legIKTarget.position, defaultTransform.position);
+        if (distance > _maxDistance)
         {
-            Vector3 startPoint = targets[i].position;
-            Vector3 endPoint = homes[i].position;
+            Vector3 startPoint = legIKTarget.position;
+            Vector3 endPoint = defaultTransform.position;
 
-            moving[i] = true;
+            _moving[legIndex] = true;
             Vector3 centerPos = (startPoint + endPoint) / 2;
-            centerPos += homes[i].transform.up * Vector3.Distance(startPoint, endPoint) / 2f;
+            centerPos += defaultTransform.up * Vector3.Distance(startPoint, endPoint) / 2f;
 
-            Sequence mysq = DOTween.Sequence();
-            mysq.Append(targets[i].DOMove(centerPos, dis / moveSpeed / 2));
-            mysq.Append(targets[i].DOMove(homes[i].transform.position, dis / moveSpeed / 2).OnComplete(() => moving[i] = false));
-            mysq.Play();
+            Sequence movementSequence = DOTween.Sequence();
+            movementSequence.Append(legIKTarget.DOMove(centerPos, distance / _moveSpeed / 2.0f));
+            movementSequence.Append(
+                legIKTarget.DOMove(endPoint, distance / _moveSpeed / 2.0f)
+                .OnComplete(() => _moving[legIndex] = false));
+            movementSequence.Play();
         }
     }
 
-    IEnumerator LegUpdateCoroutine()
+    private IEnumerator _UpdateLegs()
     {
         while (true)
         {
             do
             {
-                TryMove(0);
-                TryMove(1);
+                _TryMove(0);
+                _TryMove(1);
 
                 yield return null;
-            } while (moving[0] || moving[1]);
+            } while (_moving[0] || _moving[1]);
 
             do
             {
-                TryMove(2);
-                TryMove(3);
+                _TryMove(2);
+                _TryMove(3);
 
                 yield return null;
-            } while (moving[2] || moving[3]);
+            } while (_moving[2] || _moving[3]);
         }
     }
-
-
 }
