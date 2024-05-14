@@ -122,13 +122,15 @@ public class SpiderController : MonoBehaviour
             Vector3 endPoint = defaultTransform.position;
 
             _isMoving[legIndex] = true;
-            Vector3 centerPos = (startPoint + endPoint) / 2;
-            centerPos += defaultTransform.up * Vector3.Distance(startPoint, endPoint) / 2f;
+            Vector3 centerPos = (startPoint + endPoint) / 2.0f;
+            centerPos += defaultTransform.up * distance / 2.0f;
 
             Sequence movementSequence = DOTween.Sequence();
-            movementSequence.Append(legIKTarget.DOMove(centerPos, distance / _moveSpeed / 2.0f));
-            movementSequence.Append(
-                legIKTarget.DOMove(endPoint, distance / _moveSpeed / 2.0f)
+
+            var minDuration = 0.05f;
+            movementSequence.Append(legIKTarget.DOMove(centerPos, Mathf.Max(minDuration, distance / _moveSpeed / 2.0f)));
+            movementSequence.Append(legIKTarget
+                .DOMove(endPoint, Mathf.Max(minDuration, distance / _moveSpeed / 2.0f))
                 .OnComplete(() => _isMoving[legIndex] = false));
             movementSequence.Play();
         }
