@@ -21,7 +21,7 @@ public class SpiderController : MonoBehaviour
     [SerializeField]
     private float _bodyOffset = 1f;
     [SerializeField]
-    private bool _DrawDebugInfo = true;
+    private float _detectingDistance = 5.0f;
 
     private int _index = 0;
     private bool[] _moving;
@@ -56,12 +56,9 @@ public class SpiderController : MonoBehaviour
             if (!Physics.Raycast(
                 leg.DefaultTransform.position + transform.up * _bodyOffset, 
                 -transform.up, 
-                out var hit, 
-                5))
+                out var hit,
+                _detectingDistance))
                 continue;
-
-            if (_DrawDebugInfo)
-                Debug.DrawLine(hit.point, hit.point + Vector3.up);
 
             leg.DefaultTransform.position = hit.point;
         }
@@ -128,6 +125,20 @@ public class SpiderController : MonoBehaviour
 
                 yield return null;
             } while (_moving[2] || _moving[3]);
+        }
+    }
+
+    private void OnDrawGizmos()
+    {
+        foreach(var leg in Legs)
+        {
+            Gizmos.color = Color.red;
+            Gizmos.DrawSphere(leg.DefaultTransform.position, 0.1f);
+
+            Gizmos.color = Color.white;
+            Gizmos.DrawLine(
+                leg.DefaultTransform.position + transform.up * _bodyOffset,
+                leg.DefaultTransform.position + transform.up * _bodyOffset - transform.up * _detectingDistance);
         }
     }
 }
