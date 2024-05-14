@@ -780,16 +780,17 @@ MonoBehaviour:
   Legs:
   - LegIK: {fileID: 8299143555381872474}
     DefaultTransform: {fileID: 8299143555122055420}
-  - LegIK: {fileID: 8299143554762831042}
-    DefaultTransform: {fileID: 8299143554723278416}
   - LegIK: {fileID: 8299143554551616327}
     DefaultTransform: {fileID: 8299143555518425617}
+  - LegIK: {fileID: 8299143554762831042}
+    DefaultTransform: {fileID: 8299143554723278416}
   - LegIK: {fileID: 8299143555688369421}
     DefaultTransform: {fileID: 8299143555696705426}
   _maxDistance: 1.5
   _moveSpeed: 5
   _bodyOffset: 1
-  _DrawDebugInfo: 1
+  _detectingDistance: 5
+  _bodyCalibratingSpeed: 1
 --- !u!1 &8299143554904884831
 GameObject:
   m_ObjectHideFlags: 0

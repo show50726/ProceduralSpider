@@ -26,16 +26,16 @@ public class SpiderController : MonoBehaviour
     private float _bodyCalibratingSpeed = 1.0f;
 
     private int _index = 0;
-    private bool[] _moving;
+    private bool[] _isMoving;
 
     private void Awake()
     {
-        if(Legs.Length == 0)
+        if(Legs.Length < 2)
         {
             Debug.LogWarning("Leg data is empty. The Coroutine will not be triggered.");
         }
 
-        _moving = new bool[Legs.Length];
+        _isMoving = new bool[Legs.Length];
         _bodyOffset = transform.position.y - Legs[0].DefaultTransform.position.y;
 
         _AlignTargetToFoot();
@@ -109,7 +109,7 @@ public class SpiderController : MonoBehaviour
 
     private void _TryMove(int legIndex)
     {
-        if (_moving[legIndex])
+        if (_isMoving[legIndex])
             return;
 
         var legIKTarget = Legs[legIndex].LegIK.Target;
@@ -121,7 +121,7 @@ public class SpiderController : MonoBehaviour
             Vector3 startPoint = legIKTarget.position;
             Vector3 endPoint = defaultTransform.position;
 
-            _moving[legIndex] = true;
+            _isMoving[legIndex] = true;
             Vector3 centerPos = (startPoint + endPoint) / 2;
             centerPos += defaultTransform.up * Vector3.Distance(startPoint, endPoint) / 2f;
 
@@ -129,9 +129,29 @@ public class SpiderController : MonoBehaviour
             movementSequence.Append(legIKTarget.DOMove(centerPos, distance / _moveSpeed / 2.0f));
             movementSequence.Append(
                 legIKTarget.DOMove(endPoint, distance / _moveSpeed / 2.0f)
-                .OnComplete(() => _moving[legIndex] = false));
+                .OnComplete(() => _isMoving[legIndex] = false));
             movementSequence.Play();
         }
+    }
+
+    private bool _IsAnyOddLegMoving()
+    {
+        for(int i = 1; i < Legs.Length; i += 2)
+        {
+            if (_isMoving[i])
+                return true;
+        }
+        return false;
+    }
+
+    private bool _IsAnyEvenLegMoving()
+    {
+        for (int i = 0; i < Legs.Length; i += 2)
+        {
+            if (_isMoving[i])
+                return true;
+        }
+        return false;
     }
 
     private IEnumerator _UpdateLegs()
@@ -140,19 +160,25 @@ public class SpiderController : MonoBehaviour
         {
             do
             {
-                _TryMove(0);
-                _TryMove(1);
+                // Move even legs
+                for(int i = 0; i < Legs.Length; i += 2)
+                {
+                    _TryMove(i);
+                }
 
                 yield return null;
-            } while (_moving[0] || _moving[1]);
+            } while (_IsAnyEvenLegMoving());
 
             do
             {
-                _TryMove(2);
-                _TryMove(3);
+                // Move odd legs
+                for (int i = 1; i < Legs.Length; i += 2)
+                {
+                    _TryMove(i);
+                }
 
                 yield return null;
-            } while (_moving[2] || _moving[3]);
+            } while (_IsAnyOddLegMoving());
         }
     }
 
