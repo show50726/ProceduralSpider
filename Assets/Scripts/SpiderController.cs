@@ -1,5 +1,4 @@
 using DG.Tweening;
-using DitzelGames.FastIK;
 using System.Collections;
 using UnityEngine;
 
@@ -8,7 +7,7 @@ public class SpiderController : MonoBehaviour
     [System.Serializable]
     private struct LegData
     {
-        public FastIKFabric LegIK;
+        public Transform LegIKTarget;
         public Transform DefaultTransform;
     }
 
@@ -26,6 +25,7 @@ public class SpiderController : MonoBehaviour
     private float _bodyCalibratingSpeed = 1.0f;
 
     private int _index = 0;
+    private Vector3[] _footWorldPosition;
     private bool[] _isMoving;
 
     private void Awake()
@@ -36,19 +36,15 @@ public class SpiderController : MonoBehaviour
         }
 
         _isMoving = new bool[Legs.Length];
+        _footWorldPosition = new Vector3[Legs.Length];
         _bodyOffset = transform.position.y - Legs[0].DefaultTransform.position.y;
 
-        _AlignTargetToFoot();
+        for(int i = 0; i < Legs.Length; i++)
+        {
+            _footWorldPosition[i] = Legs[i].LegIKTarget.position;
+        }
 
         StartCoroutine(_UpdateLegs());
-    }
-
-    private void _AlignTargetToFoot()
-    {
-        foreach(var leg in Legs)
-        {
-            leg.LegIK.Target.position = leg.LegIK.transform.position;
-        }
     }
 
     private void _UpdateDefaultLegsPosition()
@@ -74,6 +70,14 @@ public class SpiderController : MonoBehaviour
         var calibratedYPos = Mathf.Lerp(position.y, targetYPos, Time.deltaTime * _bodyCalibratingSpeed);
         position.y = calibratedYPos;
         transform.position = position;
+    }
+
+    private void _UpdateIKTargetPosition()
+    {
+        for (int i = 0; i < Legs.Length; i++)
+        {
+            Legs[i].LegIKTarget.position = _footWorldPosition[i];
+        }
     }
 
     private float _CalculateBodyHeightCalibration()
@@ -104,7 +108,9 @@ public class SpiderController : MonoBehaviour
     {
         _UpdateDefaultLegsPosition();
 
-        _UpdateBodyPosition();
+        _UpdateIKTargetPosition();
+
+        //_UpdateBodyPosition();
     }
 
     private void _TryMove(int legIndex)
@@ -112,13 +118,12 @@ public class SpiderController : MonoBehaviour
         if (_isMoving[legIndex])
             return;
 
-        var legIKTarget = Legs[legIndex].LegIK.Target;
         var defaultTransform = Legs[legIndex].DefaultTransform;
 
-        float distance = Vector3.Distance(legIKTarget.position, defaultTransform.position);
+        float distance = Vector3.Distance(_footWorldPosition[legIndex], defaultTransform.position);
         if (distance > _maxDistance)
         {
-            Vector3 startPoint = legIKTarget.position;
+            Vector3 startPoint = _footWorldPosition[legIndex];
             Vector3 endPoint = defaultTransform.position;
 
             _isMoving[legIndex] = true;
@@ -128,9 +133,16 @@ public class SpiderController : MonoBehaviour
             Sequence movementSequence = DOTween.Sequence();
 
             var minDuration = 0.05f;
-            movementSequence.Append(legIKTarget.DOMove(centerPos, Mathf.Max(minDuration, distance / _moveSpeed / 2.0f)));
-            movementSequence.Append(legIKTarget
-                .DOMove(endPoint, Mathf.Max(minDuration, distance / _moveSpeed / 2.0f))
+            movementSequence.Append(DOTween.To(
+                () => _footWorldPosition[legIndex], 
+                x => _footWorldPosition[legIndex] = x, 
+                centerPos, 
+                Mathf.Max(minDuration, distance / _moveSpeed / 2.0f)));
+            movementSequence.Append(DOTween.To(
+                    () => _footWorldPosition[legIndex],
+                    x => _footWorldPosition[legIndex] = x,
+                    endPoint,
+                    Mathf.Max(minDuration, distance / _moveSpeed / 2.0f))
                 .OnComplete(() => _isMoving[legIndex] = false));
             movementSequence.Play();
         }
