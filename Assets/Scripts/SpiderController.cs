@@ -21,12 +21,18 @@ public class SpiderController : MonoBehaviour
     private float _bodyOffset = 1f;
     [SerializeField]
     private float _detectingDistance = 5.0f;
-    [SerializeField, Range(0.0f, 1.0f)]
+    [SerializeField]
     private float _bodyCalibratingSpeed = 1.0f;
+    [SerializeField]
+    private AnimationCurve _animationCurve;
 
+    // TODO: Use sphere cast to the obstacles
+    // TODO: Add time offset
     private int _index = 0;
     private Vector3[] _footWorldPosition;
     private bool[] _isMoving;
+
+    private int _selfLayer;
 
     private void Awake()
     {
@@ -38,8 +44,9 @@ public class SpiderController : MonoBehaviour
         _isMoving = new bool[Legs.Length];
         _footWorldPosition = new Vector3[Legs.Length];
         _bodyOffset = transform.position.y - Legs[0].DefaultTransform.position.y;
+        _selfLayer = LayerMask.GetMask("Characters");
 
-        for(int i = 0; i < Legs.Length; i++)
+        for (int i = 0; i < Legs.Length; i++)
         {
             _footWorldPosition[i] = Legs[i].LegIKTarget.position;
         }
@@ -51,11 +58,13 @@ public class SpiderController : MonoBehaviour
     {
         foreach (var leg in Legs)
         {
+            // TODO: exclude self layer
             if (!Physics.Raycast(
                 leg.DefaultTransform.position + transform.up * _bodyOffset,
                 -transform.up,
                 out var hit,
-                _detectingDistance))
+                _detectingDistance, 
+                ~_selfLayer))
                 continue;
 
             leg.DefaultTransform.position = hit.point;
@@ -88,7 +97,8 @@ public class SpiderController : MonoBehaviour
                 transform.position,
                 -transform.up,
                 out var hit,
-                _detectingDistance))
+                _detectingDistance,
+                _selfLayer))
             candidateY1 = hit.point.y + _bodyOffset;
 
         // Candidate 2: Average of lowest leg and highest leg's Y position
@@ -106,11 +116,13 @@ public class SpiderController : MonoBehaviour
 
     private void FixedUpdate()
     {
+        // TODO: Calibrate rotation
+
         _UpdateDefaultLegsPosition();
 
         _UpdateIKTargetPosition();
 
-        //_UpdateBodyPosition();
+        _UpdateBodyPosition();
     }
 
     private void _TryMove(int legIndex)
@@ -121,31 +133,39 @@ public class SpiderController : MonoBehaviour
         var defaultTransform = Legs[legIndex].DefaultTransform;
 
         float distance = Vector3.Distance(_footWorldPosition[legIndex], defaultTransform.position);
-        if (distance > _maxDistance)
-        {
-            Vector3 startPoint = _footWorldPosition[legIndex];
-            Vector3 endPoint = defaultTransform.position;
+        if (distance < _maxDistance)
+            return;
 
-            _isMoving[legIndex] = true;
-            Vector3 centerPos = (startPoint + endPoint) / 2.0f;
-            centerPos += defaultTransform.up * distance / 2.0f;
+        Vector3 startPoint = _footWorldPosition[legIndex];
+        Vector3 endPoint = defaultTransform.position;
+        Vector3 centerPos = (startPoint + endPoint) / 2.0f;
+        centerPos += defaultTransform.up * distance / 2.0f;
 
-            Sequence movementSequence = DOTween.Sequence();
+        Sequence movementSequence = DOTween.Sequence();
 
-            var minDuration = 0.05f;
-            movementSequence.Append(DOTween.To(
-                () => _footWorldPosition[legIndex], 
-                x => _footWorldPosition[legIndex] = x, 
-                centerPos, 
-                Mathf.Max(minDuration, distance / _moveSpeed / 2.0f)));
-            movementSequence.Append(DOTween.To(
-                    () => _footWorldPosition[legIndex],
-                    x => _footWorldPosition[legIndex] = x,
-                    endPoint,
-                    Mathf.Max(minDuration, distance / _moveSpeed / 2.0f))
-                .OnComplete(() => _isMoving[legIndex] = false));
-            movementSequence.Play();
-        }
+        float minDuration = 0.05f;
+        float duration = Mathf.Max(minDuration, distance / _moveSpeed);
+
+        float progress = 0.0f;
+        movementSequence.Append(DOTween.To(
+            () => progress,
+            x => progress = x,
+            1.0f,
+            duration)
+            .OnUpdate(() => {
+                float evaluatedValue = _animationCurve.Evaluate(progress);
+                float xPos = Mathf.Lerp(startPoint.x, endPoint.x, progress);
+                float yPos = Mathf.Lerp(startPoint.y, endPoint.y, evaluatedValue);
+                float zPos = Mathf.Lerp(startPoint.z, endPoint.z, progress);
+                _footWorldPosition[legIndex] = new Vector3(xPos, yPos, zPos);
+            })
+            .OnStart(() => _isMoving[legIndex] = true)
+            .OnComplete(() =>
+            {
+                _footWorldPosition[legIndex] = endPoint;
+                _isMoving[legIndex] = false;
+            }));
+        movementSequence.Play();
     }
 
     private bool _IsAnyOddLegMoving()
